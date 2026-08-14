@@ -1,7 +1,4 @@
-// Same-origin Next.js API when Supabase is set (ignore leftover Django/PythonAnywhere URL).
-const API_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-  ? ''
-  : (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
 
 export type Role = 'admin' | 'staff';
 
@@ -164,8 +161,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const base = API_URL.replace(/\/+$/, '');
-  const res = await fetch(`${base}/api${path}`, {
+  const res = await fetch(`${API_URL}/api${path}`, {
     ...options,
     headers,
     cache: 'no-store',
