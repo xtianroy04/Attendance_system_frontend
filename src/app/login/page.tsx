@@ -29,6 +29,11 @@ export default function LoginPage() {
   }, [loading, user, router]);
 
   useEffect(() => {
+    const api = (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+    fetch(`${api}/api/health/`).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
