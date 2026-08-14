@@ -1,9 +1,9 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
 
 export type Role = 'admin' | 'staff';
 
 export type User = {
-  id: number;
+  id: string;
   username: string;
   first_name: string;
   last_name: string;
@@ -164,6 +164,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_URL}/api${path}`, {
     ...options,
     headers,
+    cache: 'no-store',
   });
 
   let data: unknown = null;
@@ -204,22 +205,22 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   login: (username: string, password: string) =>
-    request<{ access: string; refresh: string }>('/auth/login/', {
+    request<{ access: string; refresh: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     }),
 
-  me: () => request<User>('/auth/me/'),
+  me: () => request<User>('/auth/me'),
 
   verifyPassword: (password: string) =>
-    request<{ ok: boolean }>('/auth/verify-password/', {
+    request<{ ok: boolean }>('/auth/verify-password', {
       method: 'POST',
       body: JSON.stringify({ password }),
     }),
 
-  dashboardStats: () => request<DashboardStats>('/dashboard/stats/'),
+  dashboardStats: () => request<DashboardStats>('/dashboard/stats'),
 
-  listSeminarians: () => request<Seminarian[]>('/seminarians/'),
+  listSeminarians: () => request<Seminarian[]>('/seminarians'),
 
   createSeminarian: (payload: {
     first_name: string;
@@ -229,7 +230,7 @@ export const api = {
     is_adventist: boolean;
     mark_present?: boolean;
   }) =>
-    request<Seminarian>('/seminarians/', {
+    request<Seminarian>('/seminarians', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
@@ -244,69 +245,46 @@ export const api = {
       is_adventist: boolean;
     }>
   ) =>
-    request<Seminarian>(`/seminarians/${id}/`, {
+    request<Seminarian>(`/seminarians/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
 
   deleteSeminarian: (id: number) =>
-    request<void>(`/seminarians/${id}/`, { method: 'DELETE' }),
+    request<void>(`/seminarians/${id}`, { method: 'DELETE' }),
 
-  listSeminars: () => request<Seminar[]>('/seminars/'),
+  listSeminars: () => request<Seminar[]>('/seminars'),
 
   createSeminar: (payload: { title: string; start_date: string; end_date: string }) =>
-    request<Seminar>('/seminars/', {
+    request<Seminar>('/seminars', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
   deleteSeminar: (id: number) =>
-    request<void>(`/seminars/${id}/`, { method: 'DELETE' }),
+    request<void>(`/seminars/${id}`, { method: 'DELETE' }),
 
-  seminarTally: (id: number) => request<SeminarTally>(`/seminars/${id}/tally/`),
+  seminarTally: (id: number) => request<SeminarTally>(`/seminars/${id}/tally`),
 
   seminarArchive: (status: 'all' | 'ended' | 'active' | 'upcoming' = 'all') =>
-    request<SeminarArchiveResponse>(`/seminars/archive/?status=${status}`),
+    request<SeminarArchiveResponse>(`/seminars/archive?status=${status}`),
 
   exportTally: async (id: number, format: 'xlsx' | 'pdf') => {
-    const token = getToken();
-    const res = await fetch(`${API_URL}/api/seminars/${id}/tally/export/?type=${format}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    });
-    if (!res.ok) {
-      let detail = `Export failed (${res.status})`;
-      try {
-        const data = await res.json();
-        if (data?.detail) detail = String(data.detail);
-      } catch {
-        /* ignore */
-      }
-      throw new ApiError(detail, res.status, null);
-    }
-    const blob = await res.blob();
-    const disposition = res.headers.get('Content-Disposition') || '';
-    const match = disposition.match(/filename="?([^"]+)"?/i);
-    const filename = match?.[1] || `seminar_tally.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const tally = await api.seminarTally(id);
+    const { downloadTally } = await import('./export-tally');
+    await downloadTally(tally, format);
   },
 
   rafflePool: (id: number, mode: 'all' | 'perfect' | 'manual' | 'non_adventist' = 'all') =>
-    request<RafflePool>(`/seminars/${id}/raffle-pool/?mode=${mode}`),
+    request<RafflePool>(`/seminars/${id}/raffle-pool?mode=${mode}`),
 
   markPresent: (seminarian_id: number, seminar_id: number) =>
-    request<MarkPresentResult>('/attendance/mark/', {
+    request<MarkPresentResult>('/attendance/mark', {
       method: 'POST',
       body: JSON.stringify({ seminarian_id, seminar_id }),
     }),
 
-  listUsers: () => request<User[]>('/users/'),
+  listUsers: () => request<User[]>('/users'),
 
   createUser: (payload: {
     username: string;
@@ -316,13 +294,13 @@ export const api = {
     email?: string;
     role: Role;
   }) =>
-    request<User>('/users/', {
+    request<User>('/users', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 
   updateUser: (
-    id: number,
+    id: string,
     payload: Partial<{
       username: string;
       password: string;
@@ -333,13 +311,13 @@ export const api = {
       is_active: boolean;
     }>
   ) =>
-    request<User>(`/users/${id}/`, {
+    request<User>(`/users/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
 
-  deleteUser: (id: number) =>
-    request<void>(`/users/${id}/`, { method: 'DELETE' }),
+  deleteUser: (id: string) =>
+    request<void>(`/users/${id}`, { method: 'DELETE' }),
 };
 
 export function calcAge(birthdate: string): number | null {
